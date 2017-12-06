@@ -238,13 +238,26 @@ def qmult(q1, q2):
     -----
     See : http://en.wikipedia.org/wiki/Quaternions#Hamilton_product
     '''
-    w1, x1, y1, z1 = q1
-    w2, x2, y2, z2 = q2
+    # check if q1 is multidimensional (to increase performance)
+    if hasattr(q1[0], '__iter__'):
+        q1 = np.array(q1)
+        w1, x1, y1, z1 = (*q1.T,)
+    else:
+        w1, x1, y1, z1 = q1
+
+    # check if q2 is multidimensional (to increase performance)
+    if hasattr(q2[0], '__iter__'):    
+        q2 = np.array(q2)
+        w2, x2, y2, z2 = (*q2.T,)
+    else:
+        w2, x2, y2, z2 = q2
+
     w = w1*w2 - x1*x2 - y1*y2 - z1*z2
     x = w1*x2 + x1*w2 + y1*z2 - z1*y2
     y = w1*y2 + y1*w2 + z1*x2 - x1*z2
     z = w1*z2 + z1*w2 + x1*y2 - y1*x2
-    return np.array([w, x, y, z])
+
+    return np.array([w, x, y, z]).T
 
 
 def qconjugate(q):
@@ -276,12 +289,15 @@ def qnorm(q):
     n : scalar
        quaternion norm
     '''
-    return np.dot(q, q)
+    if hasattr(q[0], '__iter__'):
+        return np.sum(np.square(q),axis=1)
+    else:
+        return np.dot(q, q)
 
 
 def qisunit(q):
     ''' Return True is this is very nearly a unit quaternion '''
-    return np.allclose(qnorm(q), 1)
+    return np.isclose(qnorm(q), 1)
 
 
 def qinverse(q):
@@ -297,7 +313,10 @@ def qinverse(q):
     invq : array shape (4,)
        w, i, j, k of quaternion inverse
     '''
-    return qconjugate(q) / qnorm(q)
+    n = qnorm(q)
+    if n.ndim > 0:
+        n = n[:,None] # create column vector of norms
+    return qconjugate(q) / n
 
 
 def qeye():
@@ -324,9 +343,15 @@ def rotate_vector(v, q):
     -----
     See: http://en.wikipedia.org/wiki/Quaternions_and_spatial_rotation#Describing_rotations_with_quaternions
     '''
-    varr = np.zeros((4,))
-    varr[1:] = v
-    return qmult(q, qmult(varr, qconjugate(q)))[1:]
+    v = np.array(v)
+    if v.ndim > 1:
+        varr = np.zeros((v.shape[0],4))
+        varr[:,1:] = v
+        return qmult(q, qmult(varr, qconjugate(q)))[:,1:]
+    else:
+        varr = np.zeros((4,))
+        varr[1:] = v
+        return qmult(q, qmult(varr, qconjugate(q)))[1:]
 
 
 def nearly_equivalent(q1, q2, rtol=1e-5, atol=1e-8):
